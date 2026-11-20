@@ -34,12 +34,12 @@ def adaptive_drop_edges(ei, centrality, base_p, training):
 
 def gcn_norm(ei, n):
     loop = torch.arange(n, device=ei.device)
-    src = torch.cat([ei[0], loop])
-    dst = torch.cat([ei[1], loop])
-    deg = torch.zeros(n, device=ei.device).index_add_(0, dst, torch.ones(dst.size(0), device=ei.device))
-    din = torch.zeros(n, device=ei.device).index_add_(0, src, torch.ones(src.size(0), device=ei.device))
-    w = din.clamp(min=1).pow(-0.5)[src] * deg.clamp(min=1).pow(-0.5)[dst]
-    return src, dst, w
+    row = torch.cat([ei[0], loop])
+    col = torch.cat([ei[1], loop])
+    deg = torch.zeros(n, device=ei.device).index_add_(0, col, torch.ones_like(col, dtype=torch.float32))
+    dinv = deg.clamp(min=1.0).pow(-0.5)
+    w = dinv[row] * dinv[col]
+    return row, col, w
 
 
 def propagate(h, row, col, w, n):
@@ -79,8 +79,11 @@ class InputLinear(nn.Module):
         return h
 
     def root_only(self, b, p=0.0):
-        t = F.dropout(b.text, p, self.training) if p > 0 else b.text
-        return self.wt(t) + self.ws(b.struct[b.root])
+        t, s = b.text, b.struct[b.root]
+        if p > 0.0:
+            t = F.dropout(t, p, True)
+            s = F.dropout(s, p, True)
+        return self.wt(t) + self.ws(s)
 
 
 class RumorGCN(nn.Module):
@@ -88,32 +91,29 @@ class RumorGCN(nn.Module):
 
     def __init__(self, vocab, hid, out, n_struct=N_STRUCT_BASE, use_root=True, dropout=0.5):
         super().__init__()
-        self.conv1 = InputLinear(vocab, hid, n_struct=n_struct, bias=False)
-        self.conv2_h = nn.Linear(hid, out, bias=False)
-        self.conv2_r = InputLinear(vocab, out, n_struct=n_struct, bias=False)
         self.use_root = use_root
         self.dropout = dropout
+        self.conv1 = InputLinear(vocab, hid, n_struct=n_struct, bias=False)
+        self.conv1_bias = nn.Parameter(torch.zeros(hid))
+        self.conv2_h = nn.Linear(hid, out, bias=False)
+        self.conv2_r = InputLinear(vocab, out, n_struct=n_struct, bias=False) if use_root else None
+        self.conv2_bias = nn.Parameter(torch.zeros(out))
         self.out_dim = hid + out if use_root else out
 
     def forward(self, b, ei):
         n = b.num_nodes
         row, col, w = gcn_norm(ei, n)
-        h1 = F.relu(propagate(self.conv1(b), row, col, w, n))
-        h1_drop = F.dropout(h1, self.dropout, self.training)
-        root1 = h1[b.root]
-
+        h1 = propagate(self.conv1(b), row, col, w, n) + self.conv1_bias
+        x2 = h1
         if self.use_root:
-            h2_in = self.conv2_h(h1_drop)
-            r_in = self.conv2_r.root_only(b, p=self.dropout)
-            h2_in = h2_in.clone()
-            h2_in[b.root] = h2_in[b.root] + r_in
+            r = self.conv2_r.root_only(b, self.dropout if self.training else 0.0)[b.batch]
+            h2_in = self.conv2_h(F.dropout(F.relu(h1), self.dropout, self.training)) + r
         else:
-            h2_in = self.conv2_h(h1_drop)
-
-        h2 = F.relu(propagate(h2_in, row, col, w, n))
+            h2_in = self.conv2_h(F.dropout(F.relu(h1), self.dropout, self.training))
+        h2 = F.relu(propagate(h2_in, row, col, w, n) + self.conv2_bias)
         pooled = scatter_mean(h2, b.batch, b.num_graphs)
         if self.use_root:
-            return torch.cat([pooled, scatter_mean(root1[b.batch], b.batch, b.num_graphs)], dim=1)
+            return torch.cat([pooled, x2[b.root]], dim=1)
         return pooled
 
 
@@ -246,6 +246,7 @@ class BayesianDirRumorGCN(nn.Module):
     def __init__(self, vocab, hid=64, out=64, n_struct=N_STRUCT_EXT, dropout=0.5):
         super().__init__()
         self.conv1 = InputLinear(vocab, hid, n_struct=n_struct, bias=False)
+        self.conv1_bias = nn.Parameter(torch.zeros(hid))
         self.edge_gate = nn.Sequential(
             nn.Linear(hid * 2, hid // 2),
             nn.ReLU(),
@@ -253,14 +254,15 @@ class BayesianDirRumorGCN(nn.Module):
         )
         self.conv2_h = nn.Linear(hid, out, bias=False)
         self.conv2_r = InputLinear(vocab, out, n_struct=n_struct, bias=False)
+        self.conv2_bias = nn.Parameter(torch.zeros(out))
         self.dropout = dropout
         self.out_dim = hid + out
 
     def forward(self, b, ei, return_edge_probs=False):
         n = b.num_nodes
         row, col, w_norm = gcn_norm(ei, n)
-        x0 = self.conv1(b)
-        h1 = F.relu(propagate(x0, row, col, w_norm, n))
+        h1_raw = propagate(self.conv1(b), row, col, w_norm, n) + self.conv1_bias
+        h1 = F.relu(h1_raw)
 
         if ei.size(1) > 0:
             edge_feat = torch.cat([h1[ei[0]], h1[ei[1]]], dim=1)
@@ -274,10 +276,10 @@ class BayesianDirRumorGCN(nn.Module):
             p_edge = torch.zeros(0, device=h1.device)
 
         h1_drop = F.dropout(h1, self.dropout, self.training)
-        h2_in = self.conv2_h(h1_drop).clone()
-        h2_in[b.root] = h2_in[b.root] + self.conv2_r.root_only(b, p=self.dropout)
-        h2 = F.relu(weighted_propagate(h2_in, ei, p_edge, n))
-        pooled = torch.cat([scatter_mean(h2, b.batch, b.num_graphs), h1[b.root]], dim=1)
+        r = self.conv2_r.root_only(b, self.dropout if self.training else 0.0)[b.batch]
+        h2_in = self.conv2_h(h1_drop) + r
+        h2 = F.relu(weighted_propagate(h2_in, ei, p_edge, n) + self.conv2_bias)
+        pooled = torch.cat([scatter_mean(h2, b.batch, b.num_graphs), h1_raw[b.root]], dim=1)
         if return_edge_probs:
             return pooled, p_edge
         return pooled

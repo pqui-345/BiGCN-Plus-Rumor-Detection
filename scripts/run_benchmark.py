@@ -137,15 +137,11 @@ def load_yaml_config(path):
 
 
 def make_optimizer(model, lr, weight_decay):
-    """Apply differential lr/5 on bottom-up convolutional weights as in Bian et al. (2020)."""
+    """Apply differential lr/5 on bottom-up convolutional branch as in Bian et al. (2020)."""
     if hasattr(model, "bu") and model.bu is not None:
-        bu_params = []
-        for attr in ("conv1", "conv2_h", "conv2_r", "edge_gate"):
-            if hasattr(model.bu, attr):
-                bu_params.extend(list(getattr(model.bu, attr).parameters()))
-        bu_ids = {id(p) for p in bu_params}
+        bu_trainable = [p for p in model.bu.parameters() if p.requires_grad]
+        bu_ids = {id(p) for p in bu_trainable}
         base_params = [p for p in model.parameters() if p.requires_grad and id(p) not in bu_ids]
-        bu_trainable = [p for p in bu_params if p.requires_grad]
         if bu_trainable:
             return torch.optim.Adam(
                 [{"params": base_params, "lr": lr}, {"params": bu_trainable, "lr": lr / 5.0}],
@@ -219,7 +215,10 @@ def train_gnn_fold(
     n_struct = N_STRUCT_EXT if model_name in EXT_STRUCT_MODELS else N_STRUCT_BASE
 
     if model_name == "BiGCN-Base+":
-        text_mat = build_sublinear_tfidf_features(docs, tr_idx, max_features=args.vocab_size).toarray().astype(np.float32)
+        text_mat = (
+            build_sublinear_tfidf_features(docs, tr_idx, max_features=args.vocab_size).toarray().astype(np.float32)
+            * np.float32(np.sqrt(12.0))
+        )
     else:
         text_mat = fit_transform_bow_count(docs, tr_idx, max_features=args.vocab_size)
     vocab = text_mat.shape[1]
@@ -452,6 +451,7 @@ def run_one_model(dataset, model_name, docs, trees, y, plm_embs, args, device):
     payload = {
         "dataset": dataset,
         "model": model_name,
+        "arch_version": "v2_exact_bigcn",
         "primary_eval_mode": primary_mode,
         "device": str(device),
         "seeds": list(args.seeds),
