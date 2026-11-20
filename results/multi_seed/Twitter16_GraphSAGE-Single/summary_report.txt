@@ -1,0 +1,16 @@
+Dataset: Twitter16 | Model: GraphSAGE-Single
+Device: cuda | Primary Eval: last
+Seeds (5): [42, 43, 44, 45, 46] | Folds (5): [0, 1, 2, 3, 4] | Total Runs: 25
+Mean Time: 0.1051 s/ep (or fold)
+----------------------------------------------------------------
+Accuracy          : 0.8614 +/- 0.0249 (seed-std=0.0039)
+Macro-Precision   : 0.8654 +/- 0.0255 (seed-std=0.0042)
+Macro-Recall      : 0.8613 +/- 0.0249 (seed-std=0.0040)
+Macro-F1          : 0.8612 +/- 0.0252 (seed-std=0.0040)
+F1-NR             : 0.8201 +/- 0.0415 (seed-std=0.0090)
+F1-FR             : 0.8391 +/- 0.0395 (seed-std=0.0076)
+F1-TR             : 0.8991 +/- 0.0290 (seed-std=0.0063)
+F1-UR             : 0.8866 +/- 0.0329 (seed-std=0.0109)
+Cohen-Kappa       : 0.8151 +/- 0.0332 (seed-std=0.0052)
+MCC               : 0.8165 +/- 0.0332 (seed-std=0.0052)
+AUC-ROC           : 0.9717 +/- 0.0087 (seed-std=0.0014)

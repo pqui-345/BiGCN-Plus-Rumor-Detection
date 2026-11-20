@@ -1,0 +1,16 @@
+Dataset: Twitter16 | Model: BiGCN-NoDropEdge
+Device: cuda | Primary Eval: last
+Seeds (5): [42, 43, 44, 45, 46] | Folds (5): [0, 1, 2, 3, 4] | Total Runs: 25
+Mean Time: 0.1894 s/ep (or fold)
+----------------------------------------------------------------
+Accuracy          : 0.8169 +/- 0.0239 (seed-std=0.0021)
+Macro-Precision   : 0.8244 +/- 0.0234 (seed-std=0.0028)
+Macro-Recall      : 0.8168 +/- 0.0240 (seed-std=0.0021)
+Macro-F1          : 0.8175 +/- 0.0235 (seed-std=0.0025)
+F1-NR             : 0.7800 +/- 0.0481 (seed-std=0.0029)
+F1-FR             : 0.7776 +/- 0.0396 (seed-std=0.0046)
+F1-TR             : 0.8698 +/- 0.0287 (seed-std=0.0083)
+F1-UR             : 0.8426 +/- 0.0338 (seed-std=0.0039)
+Cohen-Kappa       : 0.7558 +/- 0.0319 (seed-std=0.0028)
+MCC               : 0.7578 +/- 0.0320 (seed-std=0.0026)
+AUC-ROC           : 0.9568 +/- 0.0092 (seed-std=0.0017)

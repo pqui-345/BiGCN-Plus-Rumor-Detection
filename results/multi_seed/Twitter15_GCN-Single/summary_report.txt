@@ -1,0 +1,16 @@
+Dataset: Twitter15 | Model: GCN-Single
+Device: cuda | Primary Eval: last
+Seeds (5): [42, 43, 44, 45, 46] | Folds (5): [0, 1, 2, 3, 4] | Total Runs: 25
+Mean Time: 0.1876 s/ep (or fold)
+----------------------------------------------------------------
+Accuracy          : 0.7738 +/- 0.0211 (seed-std=0.0059)
+Macro-Precision   : 0.7793 +/- 0.0203 (seed-std=0.0064)
+Macro-Recall      : 0.7737 +/- 0.0210 (seed-std=0.0059)
+Macro-F1          : 0.7742 +/- 0.0208 (seed-std=0.0058)
+F1-NR             : 0.7900 +/- 0.0344 (seed-std=0.0062)
+F1-FR             : 0.7273 +/- 0.0341 (seed-std=0.0115)
+F1-TR             : 0.8140 +/- 0.0308 (seed-std=0.0058)
+F1-UR             : 0.7654 +/- 0.0362 (seed-std=0.0140)
+Cohen-Kappa       : 0.6984 +/- 0.0281 (seed-std=0.0079)
+MCC               : 0.6999 +/- 0.0280 (seed-std=0.0081)
+AUC-ROC           : 0.9327 +/- 0.0100 (seed-std=0.0018)

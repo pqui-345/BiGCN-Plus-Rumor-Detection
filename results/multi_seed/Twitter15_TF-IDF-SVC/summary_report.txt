@@ -1,0 +1,16 @@
+Dataset: Twitter15 | Model: TF-IDF-SVC
+Device: cuda | Primary Eval: last
+Seeds (5): [42, 43, 44, 45, 46] | Folds (5): [0, 1, 2, 3, 4] | Total Runs: 25
+Mean Time: 1.2299 s/ep (or fold)
+----------------------------------------------------------------
+Accuracy          : 0.7949 +/- 0.0257 (seed-std=0.0095)
+Macro-Precision   : 0.7996 +/- 0.0230 (seed-std=0.0083)
+Macro-Recall      : 0.7953 +/- 0.0256 (seed-std=0.0094)
+Macro-F1          : 0.7917 +/- 0.0269 (seed-std=0.0101)
+F1-NR             : 0.7443 +/- 0.0332 (seed-std=0.0125)
+F1-FR             : 0.8146 +/- 0.0352 (seed-std=0.0087)
+F1-TR             : 0.8527 +/- 0.0282 (seed-std=0.0080)
+F1-UR             : 0.7551 +/- 0.0447 (seed-std=0.0205)
+Cohen-Kappa       : 0.7266 +/- 0.0343 (seed-std=0.0126)
+MCC               : 0.7299 +/- 0.0330 (seed-std=0.0120)
+AUC-ROC           : 0.9456 +/- 0.0101 (seed-std=0.0039)

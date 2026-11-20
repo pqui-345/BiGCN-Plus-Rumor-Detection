@@ -1,0 +1,194 @@
+{
+  "dataset": "Twitter16",
+  "model": "MLP-BoW",
+  "primary_eval_mode": "last",
+  "device": "cpu",
+  "seeds": [
+    42
+  ],
+  "folds": [
+    0
+  ],
+  "epochs": 2,
+  "snapshot_k": 2,
+  "sec_per_epoch_mean": 0.08822572231292725,
+  "confusion_matrix_sum": [
+    [
+      35,
+      0,
+      6,
+      0
+    ],
+    [
+      33,
+      0,
+      8,
+      0
+    ],
+    [
+      7,
+      0,
+      35,
+      0
+    ],
+    [
+      34,
+      0,
+      7,
+      0
+    ]
+  ],
+  "summary": {
+    "n_seeds": 1,
+    "n_runs": 1,
+    "mean": {
+      "Accuracy": 0.42424242424242425,
+      "Macro-Precision": 0.23652522935779818,
+      "Macro-Recall": 0.4217479674796748,
+      "Macro-F1": 0.29523809523809524,
+      "F1-NR": 0.4666666666666667,
+      "F1-FR": 0.0,
+      "F1-TR": 0.7142857142857143,
+      "F1-UR": 0.0,
+      "Cohen-Kappa": 0.23176828072926878,
+      "MCC": 0.29953008791667307,
+      "AUC-ROC": 0.7923941278583293
+    },
+    "std_all_runs": {
+      "Accuracy": 0.0,
+      "Macro-Precision": 0.0,
+      "Macro-Recall": 0.0,
+      "Macro-F1": 0.0,
+      "F1-NR": 0.0,
+      "F1-FR": 0.0,
+      "F1-TR": 0.0,
+      "F1-UR": 0.0,
+      "Cohen-Kappa": 0.0,
+      "MCC": 0.0,
+      "AUC-ROC": 0.0
+    },
+    "std_across_seeds": {
+      "Accuracy": 0.0,
+      "Macro-Precision": 0.0,
+      "Macro-Recall": 0.0,
+      "Macro-F1": 0.0,
+      "F1-NR": 0.0,
+      "F1-FR": 0.0,
+      "F1-TR": 0.0,
+      "F1-UR": 0.0,
+      "Cohen-Kappa": 0.0,
+      "MCC": 0.0,
+      "AUC-ROC": 0.0
+    },
+    "per_seed": {
+      "42": {
+        "Accuracy": 0.42424242424242425,
+        "Macro-Precision": 0.23652522935779818,
+        "Macro-Recall": 0.4217479674796748,
+        "Macro-F1": 0.29523809523809524,
+        "F1-NR": 0.4666666666666667,
+        "F1-FR": 0.0,
+        "F1-TR": 0.7142857142857143,
+        "F1-UR": 0.0,
+        "Cohen-Kappa": 0.23176828072926878,
+        "MCC": 0.29953008791667307,
+        "AUC-ROC": 0.7923941278583293
+      }
+    }
+  },
+  "alt_eval_mode": "snapshot5",
+  "alt_summary": {
+    "n_seeds": 1,
+    "n_runs": 1,
+    "mean": {
+      "Accuracy": 0.3878787878787879,
+      "Macro-Precision": 0.20225563909774436,
+      "Macro-Recall": 0.38501742160278746,
+      "Macro-F1": 0.26365546218487396,
+      "F1-NR": 0.411764705882353,
+      "F1-FR": 0.0,
+      "F1-TR": 0.6428571428571428,
+      "F1-UR": 0.0,
+      "Cohen-Kappa": 0.18268759195684162,
+      "MCC": 0.22604445440276563,
+      "AUC-ROC": 0.7505198381476902
+    },
+    "std_all_runs": {
+      "Accuracy": 0.0,
+      "Macro-Precision": 0.0,
+      "Macro-Recall": 0.0,
+      "Macro-F1": 0.0,
+      "F1-NR": 0.0,
+      "F1-FR": 0.0,
+      "F1-TR": 0.0,
+      "F1-UR": 0.0,
+      "Cohen-Kappa": 0.0,
+      "MCC": 0.0,
+      "AUC-ROC": 0.0
+    },
+    "std_across_seeds": {
+      "Accuracy": 0.0,
+      "Macro-Precision": 0.0,
+      "Macro-Recall": 0.0,
+      "Macro-F1": 0.0,
+      "F1-NR": 0.0,
+      "F1-FR": 0.0,
+      "F1-TR": 0.0,
+      "F1-UR": 0.0,
+      "Cohen-Kappa": 0.0,
+      "MCC": 0.0,
+      "AUC-ROC": 0.0
+    },
+    "per_seed": {
+      "42": {
+        "Accuracy": 0.3878787878787879,
+        "Macro-Precision": 0.20225563909774436,
+        "Macro-Recall": 0.38501742160278746,
+        "Macro-F1": 0.26365546218487396,
+        "F1-NR": 0.411764705882353,
+        "F1-FR": 0.0,
+        "F1-TR": 0.6428571428571428,
+        "F1-UR": 0.0,
+        "Cohen-Kappa": 0.18268759195684162,
+        "MCC": 0.22604445440276563,
+        "AUC-ROC": 0.7505198381476902
+      }
+    }
+  },
+  "per_run_records": [
+    {
+      "seed": 42,
+      "fold": 0,
+      "eval_mode": "last",
+      "sec_per_ep": 0.08822572231292725,
+      "Accuracy": 0.42424242424242425,
+      "Macro-Precision": 0.23652522935779818,
+      "Macro-Recall": 0.4217479674796748,
+      "Macro-F1": 0.29523809523809524,
+      "F1-NR": 0.4666666666666667,
+      "F1-FR": 0.0,
+      "F1-TR": 0.7142857142857143,
+      "F1-UR": 0.0,
+      "Cohen-Kappa": 0.23176828072926878,
+      "MCC": 0.29953008791667307,
+      "AUC-ROC": 0.7923941278583293
+    },
+    {
+      "seed": 42,
+      "fold": 0,
+      "eval_mode": "snapshot5",
+      "sec_per_ep": 0.08822572231292725,
+      "Accuracy": 0.3878787878787879,
+      "Macro-Precision": 0.20225563909774436,
+      "Macro-Recall": 0.38501742160278746,
+      "Macro-F1": 0.26365546218487396,
+      "F1-NR": 0.411764705882353,
+      "F1-FR": 0.0,
+      "F1-TR": 0.6428571428571428,
+      "F1-UR": 0.0,
+      "Cohen-Kappa": 0.18268759195684162,
+      "MCC": 0.22604445440276563,
+      "AUC-ROC": 0.7505198381476902
+    }
+  ]
+}

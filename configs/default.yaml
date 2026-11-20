@@ -1,0 +1,28 @@
+# Cấu hình chuẩn thực nghiệm đa lượt chạy (Multi-Seed × 5-Fold Stratified CV)
+experiment:
+  datasets: ["Twitter15", "Twitter16"]
+  seeds: [42, 43, 44, 45, 46]   # 5 seeds × 5 folds = 25 lượt/mô hình (có thể mở rộng lên 10 seeds)
+  n_folds: 5
+  epochs: 100
+  batch_size: 128
+  lr: 0.0005
+  weight_decay: 0.0001
+  hidden_dim: 64
+  sage_dim: 32
+  td_droprate: 0.2
+  bu_droprate: 0.2
+  vocab_size: 5000
+  snapshot_k: 5
+
+branch3:
+  max_features: 40000
+  ridge_lam: 0.45
+  u_weight_clean: 0.0     # Không dùng User ID (chuẩn sạch, tránh account memorization)
+  u_weight_full: 0.95     # Biến thể có User-ID Gram Kernel để đối chứng ablation
+
+plm:
+  model_name: "roberta-base"
+  epochs: 6
+  batch_size: 16
+  lr: 2.0e-5
+  max_length: 128

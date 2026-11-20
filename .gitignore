@@ -1,0 +1,38 @@
+# Python cache & environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Datasets & raw archives (download instructions in data/README.md)
+data/rumdetect2017/
+data/*.zip
+*.pkl
+*.pt
+*.pth
+
+# Heavy logs / temp figures (keep summary tables)
+results/raw_epochs/
+logs/
+wandb/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.toc
+*.synctex.gz
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
