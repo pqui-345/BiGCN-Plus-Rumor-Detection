@@ -95,13 +95,18 @@ BiGCN-Plus-Rumor-Detection/
 │   ├── baselines_gnn.py             # MLP-BoW, GCN, GraphSAGE, GAT, BiGCN(+ablations), EBGCN, RAGCL
 │   └── bigcn_plus.py                # BiGCN-Plus-Clean, UserID ablation, B1Only, B2Only, B12, PLM
 ├── scripts/
-│   ├── run_benchmark.py             # Runner CLI hợp nhất mọi mô hình và mọi seed
-│   ├── aggregate_results.py         # Tổng hợp bảng CSV/MD/LaTeX, p-value và biểu đồ 300 DPI
+│   ├── run_benchmark.py             # Runner CLI hợp nhất mọi mô hình, OOF & phát hiện sớm
+│   ├── aggregate_results.py         # Tổng hợp bảng CSV/MD/LaTeX, độ thưa cây & biểu đồ 400 DPI
+│   ├── export_demo_bundle.py        # Huấn luyện & xuất gói trọng số fp16 cho Demo
 │   └── CT255_RumorDetection_BiGCN_Plus_MultiSeed_5x5_Colab_T4GPU.ipynb
+├── demo/
+│   ├── app.py                       # Máy chủ Web Demo 4 tab (Python thuần + PyTorch CPU)
+│   └── static/                      # Giao diện XAI, tua thời gian, What-If & bảng kết quả
 ├── results/
-│   ├── multi_seed/                  # Kết quả chi tiết 40 cấu hình (JSON, CSV, Confusion Matrix, Curves)
-│   ├── tables/                      # Bảng tổng hợp, kiểm định thống kê & mã nguồn bảng LaTeX
-│   └── figures/                     # Biểu đồ xuất bản 300 DPI
+│   ├── demo_models/                 # Gói trọng số .pt xuất từ Colab T4 cho Demo
+│   ├── multi_seed/                  # Kết quả chi tiết 40 cấu hình (JSON, OOF CSV, Early CSV, PNG)
+│   ├── tables/                      # Bảng tổng hợp, độ thưa cây, phát hiện sớm & Wilcoxon p-value
+│   └── figures/                     # Biểu đồ xuất bản 400 DPI
 ├── report/
 │   └── README.md                    # Hướng dẫn liên kết tới báo cáo LaTeX
 ├── requirements.txt
@@ -132,6 +137,9 @@ python scripts/run_benchmark.py --dataset ALL --suite core --seeds 42 43 44 45 4
 
 # Tổng hợp bảng kết quả, kiểm định thống kê & vẽ lại biểu đồ
 python scripts/aggregate_results.py
+
+# Khởi chạy ứng dụng Web Demo tương tác (4 tab XAI, Phát hiện sớm, What-If & Benchmark)
+python demo/app.py
 ```
 
 Hoặc bấm nút **Open In Colab** ở đầu trang để chạy trực tiếp trên **Google Colab T4 GPU**.

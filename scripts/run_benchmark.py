@@ -45,6 +45,7 @@ from src.baselines_nlp import (
 )
 from src.bigcn_plus import BiGCNPlus, compute_branch3_logits
 from src.data_loader import (
+    EARLY_DEADLINES_MIN,
     LABELS,
     N_STRUCT_BASE,
     N_STRUCT_EXT,
@@ -54,6 +55,7 @@ from src.data_loader import (
     get_kfold_splits,
     load_dataset,
     make_batch,
+    truncate_tree_by_delay,
 )
 from src.metrics import (
     METRIC_KEYS,
@@ -119,6 +121,16 @@ DEFAULT_SNAPSHOT_MODELS = {
     "BiGCN-Plus-UserID",
     "BiGCN-Plus-PLM",
 }
+EARLY_EVAL_MODELS = {
+    "TF-IDF-Ridge",
+    "MLP-BoW",
+    "GraphSAGE-Single",
+    "BiGCN-Base",
+    "EBGCN",
+    "RAGCL",
+    "BiGCN-Plus-Clean",
+}
+ARCH_VERSION = "v3_auto_loo_oof"
 
 
 def set_seed(seed):
@@ -151,7 +163,7 @@ def make_optimizer(model, lr, weight_decay):
 
 
 def save_confusion_matrix(cm, title, out_path):
-    fig, ax = plt.subplots(figsize=(6.2, 5.2))
+    fig, ax = plt.subplots(figsize=(6.4, 5.4))
     im = ax.imshow(cm, interpolation="nearest", cmap="Blues")
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     ax.set(
@@ -159,19 +171,22 @@ def save_confusion_matrix(cm, title, out_path):
         yticks=np.arange(len(LABELS)),
         xticklabels=LABELS,
         yticklabels=LABELS,
-        xlabel="Predicted Label",
-        ylabel="True Label",
+        xlabel="Nhãn dự đoán",
+        ylabel="Nhãn thực tế",
         title=title,
     )
+    ax.xaxis.label.set_fontsize(11)
+    ax.yaxis.label.set_fontsize(11)
+    ax.title.set_fontsize(12)
     thresh = cm.max() / 2.0 if cm.max() > 0 else 0.5
     row_sums = cm.sum(axis=1, keepdims=True)
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
             pct = 100.0 * cm[i, j] / max(row_sums[i, 0], 1)
             color = "white" if cm[i, j] > thresh else "black"
-            ax.text(j, i, f"{cm[i, j]}\n({pct:.1f}%)", ha="center", va="center", color=color, fontsize=9)
+            ax.text(j, i, f"{cm[i, j]}\n({pct:.1f}%)", ha="center", va="center", color=color, fontsize=9.5)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=180)
+    plt.savefig(out_path, dpi=400)
     plt.close(fig)
 
 
@@ -179,23 +194,43 @@ def save_training_curves(epoch_df, title, out_path):
     if epoch_df.empty:
         return
     agg = epoch_df.groupby("epoch")[["train_loss", "test_acc", "test_f1"]].mean().reset_index()
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.5, 4.3))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.8, 4.5))
     ax1.plot(agg["epoch"], agg["train_loss"], color="#1f77b4", lw=2.0)
-    ax1.set_title(f"{title} - Mean Train Loss")
-    ax1.set_xlabel("Epoch")
-    ax1.set_ylabel("Loss")
+    ax1.set_title(f"{title} — Mất mát huấn luyện", fontsize=11.5)
+    ax1.set_xlabel("Vòng lặp huấn luyện (Epoch)", fontsize=10.5)
+    ax1.set_ylabel("Hàm mất mát (Loss)", fontsize=10.5)
     ax1.grid(True, ls="--", alpha=0.35)
 
     ax2.plot(agg["epoch"], agg["test_acc"], label="Accuracy", color="#2ca02c", lw=2.0)
     ax2.plot(agg["epoch"], agg["test_f1"], label="Macro-F1", color="#ff7f0e", lw=2.0)
-    ax2.set_title(f"{title} - Test Acc & F1")
-    ax2.set_xlabel("Epoch")
-    ax2.set_ylabel("Score")
-    ax2.legend()
+    ax2.set_title(f"{title} — Độ chính xác & Macro-F1 kiểm thử", fontsize=11.5)
+    ax2.set_xlabel("Vòng lặp huấn luyện (Epoch)", fontsize=10.5)
+    ax2.set_ylabel("Điểm số", fontsize=10.5)
+    ax2.legend(fontsize=10)
     ax2.grid(True, ls="--", alpha=0.35)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=180)
+    plt.savefig(out_path, dpi=400)
     plt.close(fig)
+
+
+def _build_device_tree_map(trees, indices, n_struct, device):
+    return {
+        int(i): {
+            "n": int(trees[i]["n"]),
+            "edge_index": torch.tensor(trees[i]["edge_index"], dtype=torch.long, device=device),
+            "struct": torch.tensor(trees[i]["struct"][:, :n_struct], dtype=torch.float32, device=device),
+            "centrality": torch.tensor(trees[i]["centrality"], dtype=torch.float32, device=device),
+        }
+        for i in indices
+    }
+
+
+def _eval_batches_probs(model, batches):
+    probs = []
+    with torch.no_grad():
+        for b in batches:
+            probs.append(torch.exp(model(b)).cpu().numpy())
+    return np.concatenate(probs, axis=0)
 
 
 def train_gnn_fold(
@@ -210,6 +245,8 @@ def train_gnn_fold(
     seed,
     fold,
     plm_embs=None,
+    trees_by_deadline=None,
+    primary_mode="last",
 ):
     set_seed(seed * 100 + fold)
     n_struct = N_STRUCT_EXT if model_name in EXT_STRUCT_MODELS else N_STRUCT_BASE
@@ -249,6 +286,7 @@ def train_gnn_fold(
             g_weight=0.0 if use_uid else 0.25,
             ridge_lam=args.ridge_lam,
             max_features=args.b3_max_features,
+            auto_tune=not use_uid,
         )
         b3_t = torch.tensor(b3_np, dtype=torch.float32, device=device)
 
@@ -290,6 +328,40 @@ def train_gnn_fold(
         b_idx = te_idx[s : s + args.batch_size]
         te_batches.append(make_batch(b_idx, trees_t, text_t, y_t, device, n_struct=n_struct, branch3_t=b3_t, plm_t=plm_t))
 
+    eval_early = bool(getattr(args, "run_early", True) and trees_by_deadline is not None and model_name in EARLY_EVAL_MODELS)
+    dt_te_batches = {}
+    early_snap_probs = {}
+    if eval_early and model_name != "MLP-BoW":
+        for dt in EARLY_DEADLINES_MIN:
+            if dt == -1:
+                continue
+            trees_dt = trees_by_deadline[dt]
+            dt_tree_map = _build_device_tree_map(trees_dt, te_idx, n_struct, device)
+            b3_dt_t = None
+            if model_name in {"BiGCN-Plus-Clean", "BiGCN-Plus-UserID", "BiGCN-Plus-PLM"}:
+                b3_dt_np = compute_branch3_logits(
+                    docs,
+                    trees_dt,
+                    y,
+                    tr_idx,
+                    te_idx,
+                    use_user_id=False,
+                    u_weight=0.0,
+                    g_weight=0.25,
+                    ridge_lam=args.ridge_lam,
+                    max_features=args.b3_max_features,
+                    auto_tune=True,
+                )
+                b3_dt_t = torch.tensor(b3_dt_np, dtype=torch.float32, device=device)
+            batches_dt = []
+            for s in range(0, len(te_idx), args.batch_size):
+                b_idx = te_idx[s : s + args.batch_size]
+                batches_dt.append(
+                    make_batch(b_idx, dt_tree_map, text_t, y_t, device, n_struct=n_struct, branch3_t=b3_dt_t, plm_t=plm_t)
+                )
+            dt_te_batches[dt] = batches_dt
+            early_snap_probs[dt] = []
+
     epoch_rows = []
     snap_probs = []
     last_prob = None
@@ -326,17 +398,15 @@ def train_gnn_fold(
             n_steps += 1
 
         model.eval()
-        ep_probs = []
-        with torch.no_grad():
-            for b in te_batches:
-                log_p = model(b)
-                ep_probs.append(torch.exp(log_p).cpu().numpy())
-        last_prob = np.concatenate(ep_probs, axis=0)
+        last_prob = _eval_batches_probs(model, te_batches)
         ep_pred = last_prob.argmax(axis=1)
         ep_m = compute_metrics(y_te_np, ep_pred, last_prob)
 
         if ep > max(0, args.epochs - args.snapshot_k):
             snap_probs.append(last_prob)
+            if eval_early and primary_mode == "snapshot5" and model_name != "MLP-BoW":
+                for dt, batches_dt in dt_te_batches.items():
+                    early_snap_probs[dt].append(_eval_batches_probs(model, batches_dt))
 
         if seed == args.seeds[0] or ep == args.epochs:
             epoch_rows.append(
@@ -352,10 +422,28 @@ def train_gnn_fold(
 
     sec_per_ep = (time.time() - t0) / max(args.epochs, 1)
     snap_prob = np.mean(snap_probs, axis=0) if snap_probs else last_prob
-    return y_te_np, last_prob, snap_prob, sec_per_ep, epoch_rows
+
+    early_probs = None
+    if eval_early:
+        early_probs = {}
+        full_prob = snap_prob if primary_mode == "snapshot5" else last_prob
+        if model_name == "MLP-BoW":
+            for dt in EARLY_DEADLINES_MIN:
+                early_probs[dt] = full_prob
+        else:
+            model.eval()
+            for dt in EARLY_DEADLINES_MIN:
+                if dt == -1:
+                    early_probs[dt] = full_prob
+                elif primary_mode == "snapshot5" and early_snap_probs.get(dt):
+                    early_probs[dt] = np.mean(early_snap_probs[dt], axis=0)
+                else:
+                    early_probs[dt] = _eval_batches_probs(model, dt_te_batches[dt])
+
+    return y_te_np, last_prob, snap_prob, sec_per_ep, epoch_rows, early_probs
 
 
-def run_one_model(dataset, model_name, docs, trees, y, plm_embs, args, device):
+def run_one_model(dataset, model_name, ids, docs, trees, y, plm_embs, args, device, trees_by_deadline=None):
     out_dir = os.path.join(args.save_dir, f"{dataset}_{model_name}")
     os.makedirs(out_dir, exist_ok=True)
     is_nlp = model_name in NLP_MODELS
@@ -363,8 +451,14 @@ def run_one_model(dataset, model_name, docs, trees, y, plm_embs, args, device):
 
     all_records = []
     epoch_logs = []
+    early_rows = []
     cm_primary = np.zeros((4, 4), dtype=np.int64)
     sec_list = []
+
+    n_total = len(y)
+    oof_prob_sum = np.zeros((n_total, 4), dtype=np.float64)
+    oof_counts = np.zeros(n_total, dtype=np.int64)
+    record_early = bool(getattr(args, "run_early", True) and model_name in EARLY_EVAL_MODELS and (is_nlp or trees_by_deadline is not None))
 
     for seed in args.seeds:
         splits = get_kfold_splits(y, n_folds=args.n_folds, seed=seed)
@@ -407,10 +501,27 @@ def run_one_model(dataset, model_name, docs, trees, y, plm_embs, args, device):
                 m = compute_metrics(y_te, pred, prob)
                 all_records.append({"seed": seed, "fold": fold, "eval_mode": "last", "sec_per_ep": sec_ep, **m})
                 cm_primary += confusion_matrix_np(y_te, pred)
+                oof_prob_sum[te_idx] += prob
+                oof_counts[te_idx] += 1
+                if record_early:
+                    for dt in EARLY_DEADLINES_MIN:
+                        early_rows.append({"seed": seed, "fold": fold, "deadline_min": dt, **m})
                 print(f"[{dataset}][{model_name}] seed={seed} fold={fold} Acc={m['Accuracy']:.4f} F1={m['Macro-F1']:.4f} ({sec_ep:.2f}s)")
             else:
-                y_te, last_prob, snap_prob, sec_ep, ep_rows = train_gnn_fold(
-                    model_name, docs, trees, y, tr_idx, te_idx, args, device, seed, fold, plm_embs=plm_embs
+                y_te, last_prob, snap_prob, sec_ep, ep_rows, early_probs = train_gnn_fold(
+                    model_name,
+                    docs,
+                    trees,
+                    y,
+                    tr_idx,
+                    te_idx,
+                    args,
+                    device,
+                    seed,
+                    fold,
+                    plm_embs=plm_embs,
+                    trees_by_deadline=trees_by_deadline if record_early else None,
+                    primary_mode=primary_mode,
                 )
                 sec_list.append(sec_ep)
                 epoch_logs.extend(ep_rows)
@@ -423,8 +534,19 @@ def run_one_model(dataset, model_name, docs, trees, y, plm_embs, args, device):
                 m_snap = compute_metrics(y_te, pred_snap, snap_prob)
                 all_records.append({"seed": seed, "fold": fold, "eval_mode": "snapshot5", "sec_per_ep": sec_ep, **m_snap})
 
+                chosen_prob = snap_prob if primary_mode == "snapshot5" else last_prob
                 chosen_pred = pred_snap if primary_mode == "snapshot5" else pred_last
                 cm_primary += confusion_matrix_np(y_te, chosen_pred)
+                oof_prob_sum[te_idx] += chosen_prob
+                oof_counts[te_idx] += 1
+
+                if record_early and early_probs is not None:
+                    for dt in EARLY_DEADLINES_MIN:
+                        dt_prob = early_probs[dt]
+                        dt_pred = dt_prob.argmax(axis=1)
+                        dt_m = compute_metrics(y_te, dt_pred, dt_prob)
+                        early_rows.append({"seed": seed, "fold": fold, "deadline_min": dt, **dt_m})
+
                 print(
                     f"[{dataset}][{model_name}] seed={seed} fold={fold} "
                     f"Last=({m_last['Accuracy']:.4f}/{m_last['Macro-F1']:.4f}) "
@@ -435,12 +557,34 @@ def run_one_model(dataset, model_name, docs, trees, y, plm_embs, args, device):
     df_res = pd.DataFrame(all_records)
     df_res.to_csv(os.path.join(out_dir, "fold_seed_results.csv"), index=False)
 
+    valid_idx = np.where(oof_counts > 0)[0]
+    oof_rows = []
+    for idx in valid_idx:
+        mean_p = oof_prob_sum[idx] / float(oof_counts[idx])
+        oof_rows.append(
+            {
+                "tid": ids[idx],
+                "y_true": int(y[idx]),
+                "y_pred": int(mean_p.argmax()),
+                "p_NR": float(mean_p[0]),
+                "p_FR": float(mean_p[1]),
+                "p_TR": float(mean_p[2]),
+                "p_UR": float(mean_p[3]),
+                "n_nodes": int(trees[idx]["n_full"]),
+                "max_depth": int(trees[idx]["max_depth"]),
+            }
+        )
+    pd.DataFrame(oof_rows).to_csv(os.path.join(out_dir, "oof_predictions.csv"), index=False)
+
+    if early_rows:
+        pd.DataFrame(early_rows).to_csv(os.path.join(out_dir, "early_detection.csv"), index=False)
+
     if epoch_logs:
         df_ep = pd.DataFrame(epoch_logs)
         df_ep.to_csv(os.path.join(out_dir, "epoch_logs.csv"), index=False)
-        save_training_curves(df_ep[df_ep["seed"] == args.seeds[0]], f"{dataset} - {model_name}", os.path.join(out_dir, "training_curves.png"))
+        save_training_curves(df_ep[df_ep["seed"] == args.seeds[0]], f"{dataset} — {model_name}", os.path.join(out_dir, "training_curves.png"))
 
-    save_confusion_matrix(cm_primary, f"{dataset} - {model_name} ({primary_mode})", os.path.join(out_dir, "confusion_matrix.png"))
+    save_confusion_matrix(cm_primary, f"{dataset} — {model_name} ({primary_mode})", os.path.join(out_dir, "confusion_matrix.png"))
 
     prim_rows = [r for r in all_records if r["eval_mode"] == primary_mode]
     prim_summary = summarize_multiseed_records(prim_rows)
@@ -451,8 +595,10 @@ def run_one_model(dataset, model_name, docs, trees, y, plm_embs, args, device):
     payload = {
         "dataset": dataset,
         "model": model_name,
-        "arch_version": "v2_exact_bigcn",
+        "arch_version": ARCH_VERSION,
         "primary_eval_mode": primary_mode,
+        "has_oof": True,
+        "has_early": bool(early_rows),
         "device": str(device),
         "seeds": list(args.seeds),
         "folds": list(args.folds),
@@ -526,9 +672,12 @@ def main():
     parser.add_argument("--snapshot_k", type=int, default=None)
     parser.add_argument("--plm_name", type=str, default=None)
     parser.add_argument("--skip_plm", action="store_true")
+    parser.add_argument("--run_early", action="store_true", help="Evaluate early-detection trajectory on key models (default enabled)")
+    parser.add_argument("--disable_early", action="store_true", help="Disable early-detection evaluation")
     parser.add_argument("--save_dir", type=str, default=os.path.join(ROOT_DIR, "results", "multi_seed"))
     parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
+    args.run_early = not args.disable_early
 
     cfg = load_yaml_config(args.config)
     exp = cfg.get("experiment", {})
@@ -563,15 +712,24 @@ def main():
     datasets = ["Twitter15", "Twitter16"] if args.dataset == "ALL" else [args.dataset]
     models = resolve_models(args.suite, args.models, args.skip_plm)
 
-    print(f"Data root: {data_root}")
-    print(f"Device   : {device}")
-    print(f"Datasets : {datasets}")
-    print(f"Models   : {models}")
-    print(f"Seeds    : {args.seeds} | Folds: {args.folds} | Epochs: {args.epochs}")
+    print(f"Data root  : {data_root}")
+    print(f"Device     : {device}")
+    print(f"Datasets   : {datasets}")
+    print(f"Models     : {models}")
+    print(f"Seeds      : {args.seeds} | Folds: {args.folds} | Epochs: {args.epochs}")
+    print(f"Early Eval : {args.run_early}")
 
     for ds in datasets:
-        _, y, docs, trees = load_dataset(data_root, ds)
+        ids, y, docs, trees = load_dataset(data_root, ds)
         print(f"\nLoaded {ds}: N={len(y)}, class_counts={np.bincount(y).tolist()}")
+
+        trees_by_deadline = None
+        if args.run_early and any(m in EARLY_EVAL_MODELS for m in models):
+            print(f"Preparing temporally truncated trees for {ds} across {EARLY_DEADLINES_MIN}...")
+            trees_by_deadline = {
+                dt: ([truncate_tree_by_delay(t, dt) for t in trees] if dt >= 0 else trees)
+                for dt in EARLY_DEADLINES_MIN
+            }
 
         plm_embs = None
         if "BiGCN-Plus-PLM" in models:
@@ -581,7 +739,7 @@ def main():
             )
 
         for model_name in models:
-            run_one_model(ds, model_name, docs, trees, y, plm_embs, args, device)
+            run_one_model(ds, model_name, ids, docs, trees, y, plm_embs, args, device, trees_by_deadline=trees_by_deadline)
 
 
 if __name__ == "__main__":

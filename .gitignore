@@ -12,6 +12,8 @@ data/*.zip
 *.pkl
 *.pt
 *.pth
+!results/demo_models/
+!results/demo_models/*.pt
 
 # Heavy logs / temp figures (keep summary tables)
 results/raw_epochs/

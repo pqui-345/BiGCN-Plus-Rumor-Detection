@@ -17,6 +17,15 @@ from .data_loader import (
 )
 
 
+def _solve_ridge_loo_eigh(eigvals, eigvecs, Y_tr, lam):
+    """Fast eigendecomposition-based dual Ridge solve + exact Leave-One-Out logits on tr_idx."""
+    inv_d = 1.0 / np.maximum(eigvals + lam, 1e-8)
+    alpha = eigvecs @ (inv_d[:, None] * (eigvecs.T @ Y_tr))
+    diag_G = np.maximum((eigvecs ** 2) @ inv_d, 1e-6)
+    loo_tr = Y_tr - (alpha / diag_G[:, None])
+    return alpha, loo_tr
+
+
 def compute_branch3_logits(
     docs,
     trees,
@@ -28,45 +37,121 @@ def compute_branch3_logits(
     g_weight=0.25,
     ridge_lam=0.45,
     max_features=40000,
+    auto_tune=True,
+    return_artifacts=False,
 ):
     """
     Branch 3: LOO-calibrated Kernel Ridge Residual Logits fit strictly on tr_idx.
       - Text kernel: Sublinear TF-IDF word (1,2)-gram + char (3,4)-gram.
       - Graph kernel (clean): 10-dim normalized topological/temporal graph summary.
+      - With auto_tune=True and not use_user_id, selects (g_weight, ridge_lam) strictly
+        via Leave-One-Out objective on tr_idx (zero test leakage).
       - User kernel (ablation-only if use_user_id=True): tree user ID frequencies.
     """
     n_tr = len(tr_idx)
-    Xt = build_sublinear_tfidf_features(docs, tr_idx, max_features=max_features)
-    K_all_tr = (Xt @ Xt[tr_idx].T).toarray().astype(np.float32)
+    if return_artifacts:
+        Xt, tfidf_vocab, tfidf_idf = build_sublinear_tfidf_features(
+            docs, tr_idx, max_features=max_features, return_vectorizer=True
+        )
+    else:
+        Xt = build_sublinear_tfidf_features(docs, tr_idx, max_features=max_features)
+
+    Xt_tr = Xt[tr_idx]
+    K_text_all_tr = (Xt @ Xt_tr.T).toarray().astype(np.float64)
+    K_text_tr = K_text_all_tr[tr_idx]
+    Y_tr = np.eye(4, dtype=np.float64)[y[tr_idx]]
+    y_tr = y[tr_idx]
+
+    gs_n = None
+    gs_mu = np.zeros((1, 10), dtype=np.float32)
+    gs_sd = np.ones((1, 10), dtype=np.float32)
+    Kg_all = None
+    Kg_tr = None
+    has_graph_var = False
 
     if not use_user_id and g_weight > 0.0:
         gs = np.stack([t["graph_stats"] for t in trees], axis=0).astype(np.float32)
-        mu = gs[tr_idx].mean(axis=0, keepdims=True)
-        sd = np.maximum(gs[tr_idx].std(axis=0, keepdims=True), 1e-4)
-        gs_z = (gs - mu) / sd
-        norms = np.maximum(np.linalg.norm(gs_z, axis=1, keepdims=True), 1e-6)
-        gs_n = gs_z / norms
-        Kg_all = gs_n @ gs_n[tr_idx].T
-        K_all_tr = K_all_tr + g_weight * Kg_all
+        gs_mu = gs[tr_idx].mean(axis=0, keepdims=True)
+        sd_raw = gs[tr_idx].std(axis=0, keepdims=True)
+        if not np.all(sd_raw < 1e-6):
+            has_graph_var = True
+            gs_sd = np.maximum(sd_raw, 1e-4)
+            gs_z = (gs - gs_mu) / gs_sd
+            norms = np.maximum(np.linalg.norm(gs_z, axis=1, keepdims=True), 1e-6)
+            gs_n = gs_z / norms
+            Kg_all = (gs_n @ gs_n[tr_idx].T).astype(np.float64)
+            Kg_tr = Kg_all[tr_idx]
 
-    if use_user_id:
+    best_g_weight = 0.0
+    best_lam = float(ridge_lam)
+    best_alpha = None
+    best_loo_tr = None
+
+    if not use_user_id:
+        g_grid = (
+            (0.05, 0.15, 0.25, 0.35)
+            if (auto_tune and g_weight > 0.0 and has_graph_var)
+            else ((g_weight,) if (g_weight > 0.0 and has_graph_var) else (0.0,))
+        )
+        lam_grid = (0.25, 0.35, 0.45, 0.65, 1.00) if auto_tune else (float(ridge_lam),)
+
+        best_score = -1e18
+        for g_cand in g_grid:
+            K_cand = K_text_tr if g_cand == 0.0 else (K_text_tr + g_cand * Kg_tr)
+            K_cand = 0.5 * (K_cand + K_cand.T)
+            eigvals, eigvecs = np.linalg.eigh(K_cand)
+            eigvals = np.maximum(eigvals, 0.0)
+            for lam_cand in lam_grid:
+                alpha_c, loo_c = _solve_ridge_loo_eigh(eigvals, eigvecs, Y_tr, lam_cand)
+                loo_acc = float((loo_c.argmax(axis=1) == y_tr).mean())
+                loo_mse = float(np.mean((loo_c - Y_tr) ** 2))
+                score = loo_acc - 0.05 * loo_mse
+                if score > best_score:
+                    best_score = score
+                    best_g_weight = float(g_cand)
+                    best_lam = float(lam_cand)
+                    best_alpha = alpha_c
+                    best_loo_tr = loo_c
+
+        K_all_tr = K_text_all_tr if (best_g_weight == 0.0 or Kg_all is None) else (K_text_all_tr + best_g_weight * Kg_all)
+    else:
         Xu = build_user_tfidf_features(trees, tr_idx, max_features=max_features)
-        Ku_all = (Xu @ Xu[tr_idx].T).toarray().astype(np.float32)
-        K_all_tr = K_all_tr + u_weight * Ku_all
+        Ku_all = (Xu @ Xu[tr_idx].T).toarray().astype(np.float64)
+        K_all_tr = K_text_all_tr + u_weight * Ku_all
+        K_tr = 0.5 * (K_all_tr[tr_idx] + K_all_tr[tr_idx].T)
+        eigvals, eigvecs = np.linalg.eigh(K_tr)
+        eigvals = np.maximum(eigvals, 0.0)
+        best_alpha, best_loo_tr = _solve_ridge_loo_eigh(eigvals, eigvecs, Y_tr, ridge_lam)
 
-    K_tr = K_all_tr[tr_idx]
-    Y_tr = np.eye(4, dtype=np.float32)[y[tr_idx]]
-    G_inv = np.linalg.inv(K_tr + ridge_lam * np.eye(n_tr, dtype=np.float32))
-    alpha = G_inv @ Y_tr
+    raw_scores = (K_all_tr @ best_alpha).astype(np.float32)
+    raw_scores[tr_idx] = best_loo_tr.astype(np.float32)
 
-    raw_scores = K_all_tr @ alpha
-    diag_G = np.maximum(np.diag(G_inv)[:, None], 1e-6)
-    loo_tr = Y_tr - (alpha / diag_G)
-    raw_scores[tr_idx] = loo_tr
-
-    std_tr = np.maximum(raw_scores[tr_idx].std(), 1e-4)
+    std_tr = float(np.maximum(raw_scores[tr_idx].std(), 1e-4))
     logits = (raw_scores - raw_scores.mean(axis=1, keepdims=True)) / std_tr
-    return logits.astype(np.float32)
+    logits = logits.astype(np.float32)
+
+    if not return_artifacts:
+        return logits
+
+    W_text = (Xt_tr.T @ best_alpha).astype(np.float32)
+    W_graph = (
+        (best_g_weight * (gs_n[tr_idx].T @ best_alpha)).astype(np.float32)
+        if (gs_n is not None and best_g_weight > 0.0)
+        else np.zeros((10, 4), dtype=np.float32)
+    )
+    artifacts = {
+        "best_g_weight": float(best_g_weight),
+        "best_lam": float(best_lam),
+        "std_tr": float(std_tr),
+        "vocab": tfidf_vocab,
+        "idf": tfidf_idf,
+        "W_text": W_text,
+        "W_graph": W_graph,
+        "gs_mu": gs_mu.astype(np.float32),
+        "gs_sd": gs_sd.astype(np.float32),
+        "has_graph_var": bool(has_graph_var),
+    }
+    return logits, artifacts
 
 
 class DualViewSAGEEncoder(nn.Module):
@@ -184,3 +269,55 @@ class BiGCNPlus(nn.Module):
         if return_aux:
             return log_prob, logits_b1, logits_b2
         return log_prob
+
+    def forward_explain(self, b):
+        """Return end probabilities, per-branch expert probabilities, and softmax fusion weights."""
+        with torch.no_grad():
+            h_td = self.td(b, b.edge_index)
+            h_bu = self.bu(b, b.edge_index.flip(0))
+            logits_b1 = self.fc_bigcn(torch.cat([h_td, h_bu], dim=1))
+
+            h_sage = self.sage_dual(b)
+            logits_b2 = self.fc_sage(h_sage)
+
+            if self.mode == "b1_only":
+                p = F.softmax(logits_b1, dim=1)
+                return {
+                    "probs": p,
+                    "probs_b1": p,
+                    "probs_b2": F.softmax(logits_b2, dim=1),
+                    "probs_b3": None,
+                    "fusion_weights": torch.tensor([1.0, 0.0, 0.0], device=p.device),
+                }
+            if self.mode == "b2_only":
+                p = F.softmax(logits_b2, dim=1)
+                return {
+                    "probs": p,
+                    "probs_b1": F.softmax(logits_b1, dim=1),
+                    "probs_b2": p,
+                    "probs_b3": None,
+                    "fusion_weights": torch.tensor([0.0, 1.0, 0.0], device=p.device),
+                }
+            if self.mode == "b12":
+                w2 = F.softmax(self.fusion_logits[:2], dim=0)
+                fused = w2[0] * logits_b1 + w2[1] * logits_b2
+                return {
+                    "probs": F.softmax(fused, dim=1),
+                    "probs_b1": F.softmax(logits_b1, dim=1),
+                    "probs_b2": F.softmax(logits_b2, dim=1),
+                    "probs_b3": None,
+                    "fusion_weights": torch.tensor([w2[0], w2[1], 0.0], device=fused.device),
+                }
+
+            logits_b3 = b.tfidf_logits * self.residual_scale + self.residual_bias
+            w = F.softmax(self.fusion_logits, dim=0)
+            fused = w[0] * logits_b1 + w[1] * logits_b2 + w[2] * logits_b3
+            if self.plm_head is not None and b.plm_emb is not None:
+                fused = fused + torch.sigmoid(self.plm_weight) * self.plm_head(b.plm_emb)
+            return {
+                "probs": F.softmax(fused, dim=1),
+                "probs_b1": F.softmax(logits_b1, dim=1),
+                "probs_b2": F.softmax(logits_b2, dim=1),
+                "probs_b3": F.softmax(logits_b3, dim=1),
+                "fusion_weights": w,
+            }

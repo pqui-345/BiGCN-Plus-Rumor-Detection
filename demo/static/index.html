@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BiGCN-Plus XAI — Phòng Thí Nghiệm Phát Hiện Tin Đồn</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-badge">BiGCN+</div>
+      <div>
+        <h1>Hệ thống Phát hiện &amp; Giải phẫu Tin đồn trên Đồ thị Lan truyền</h1>
+        <p class="subtitle">CT255 Nghiệp vụ Thông minh &bull; Đối sánh Công bằng Không Rò Rỉ &bull; Auto-LOO &amp; Early Detection</p>
+      </div>
+    </div>
+    <div class="controls-bar">
+      <div class="ctrl-group">
+        <label for="dataset-select">Bộ dữ liệu</label>
+        <select id="dataset-select"></select>
+      </div>
+      <div class="ctrl-group">
+        <label for="filter-select">Bộ lọc mẫu Test</label>
+        <select id="filter-select">
+          <option value="highlight">Ca khó (BiGCN-Plus thắng đối thủ)</option>
+          <option value="sparse">Cây lan truyền thưa (&le; 180 nút)</option>
+          <option value="all">Tất cả mẫu Test (Fold 0)</option>
+          <option value="correct">Các ca BiGCN-Plus đoán đúng</option>
+        </select>
+      </div>
+      <div class="ctrl-group ctrl-wide">
+        <label for="event-select">Sự kiện kiểm thử (<span id="event-count">0</span>)</label>
+        <select id="event-select"></select>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs-bar">
+    <button class="tab-btn active" data-tab="event">1. Giải phẫu Sự kiện &amp; XAI</button>
+    <button class="tab-btn" data-tab="early">2. Tua Thời gian Phát hiện Sớm</button>
+    <button class="tab-btn" data-tab="whatif">3. Phòng Giả lập What-If</button>
+    <button class="tab-btn" data-tab="benchmark">4. Đối chứng Thực nghiệm Colab</button>
+    <div class="bundle-pill" id="bundle-pill">Đang tải gói mô hình...</div>
+  </nav>
+
+  <main class="container">
+    <!-- TAB 1: EVENT XAI -->
+    <section id="tab-event" class="tab-panel active">
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Nội dung Bài đăng Gốc &amp; Đồ thị Lan truyền</h2>
+              <span class="meta-line" id="ev-meta">ID: —</span>
+            </div>
+            <span class="badge-true" id="ev-true-badge">Nhãn thật: —</span>
+          </div>
+          <blockquote class="tweet-box" id="ev-tweet-text">Đang tải văn bản...</blockquote>
+          <div class="tree-toolbar">
+            <span>Kéo để di chuyển &bull; Lăn chuột để thu/phóng &bull; Di chuột vào nút xem chi tiết</span>
+            <button class="btn-sm" id="btn-reset-zoom-1">Đặt lại góc nhìn</button>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="tree-canvas-1" width="680" height="420"></canvas>
+            <div class="tree-tooltip" id="tree-tooltip-1"></div>
+          </div>
+          <div class="tree-legend">
+            <span><i class="dot dot-root"></i> Gốc (t=0p)</span>
+            <span><i class="dot dot-early"></i> Sớm (&le; 15p)</span>
+            <span><i class="dot dot-mid"></i> Trung bình (15–120p)</span>
+            <span><i class="dot dot-late"></i> Muộn (&gt; 120p)</span>
+            <span class="ml-auto" id="ev-tree-stats">—</span>
+          </div>
+        </div>
+
+        <div class="stack-col">
+          <div class="card">
+            <div class="card-header">
+              <h2>Bảng Đối đầu Trực tiếp các Mô hình</h2>
+              <span class="meta-line">Cùng mẫu Test độc lập (Fold 0)</span>
+            </div>
+            <table class="data-table" id="showdown-table">
+              <thead>
+                <tr>
+                  <th>Mô hình</th>
+                  <th>Dự đoán</th>
+                  <th class="right">Độ tin cậy</th>
+                  <th>Phân bố xác suất (NR / FR / TR / UR)</th>
+                  <th>Kết quả</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>Giải phẫu Hộp trắng 3 Chuyên gia (XAI BiGCN-Plus-Clean)</h2>
+              <span class="meta-line" id="xai-auto-loo">Auto-LOO: —</span>
+            </div>
+            <div class="fusion-strip" id="fusion-strip"></div>
+            <div id="branch-bars" class="branch-bars"></div>
+          </div>
+
+          <div class="grid-sub2">
+            <div class="card">
+              <div class="card-header">
+                <h3>Top-10 Tín hiệu Từ vựng TF-IDF</h3>
+              </div>
+              <ul class="token-list" id="top-tokens-list"></ul>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>10 Đặc trưng Hình thái Toàn Đồ thị</h3>
+              </div>
+              <table class="data-table compact" id="graph-stats-table">
+                <thead>
+                  <tr><th>Đặc trưng</th><th class="right">Giá trị</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: EARLY DETECTION -->
+    <section id="tab-early" class="tab-panel">
+      <div class="card mb-16">
+        <div class="early-controls">
+          <button class="btn-primary" id="btn-play-early">&#9654; Tự động phát quá trình lan truyền</button>
+          <div class="slider-box">
+            <label for="early-slider">Mốc thời gian quan sát sau bài đăng gốc: <strong id="early-time-label">Toàn cảnh (Full)</strong></label>
+            <input type="range" id="early-slider" min="0" max="7" value="7" step="1" />
+            <div class="slider-ticks">
+              <span>0p</span><span>10p</span><span>30p</span><span>1 giờ</span><span>2 giờ</span><span>4 giờ</span><span>12 giờ</span><span>Full</span>
+            </div>
+          </div>
+          <div class="early-kpi" id="early-kpi"></div>
+        </div>
+      </div>
+
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-header">
+            <h2>Cây Lan truyền tại Mốc Thời gian Đã chọn</h2>
+            <span class="meta-line" id="early-tree-meta">—</span>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="tree-canvas-2" width="680" height="430"></canvas>
+            <div class="tree-tooltip" id="tree-tooltip-2"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Đường cong Độ tin cậy qua 8 Mốc Thời gian</h2>
+            <span class="meta-line" id="early-true-note">—</span>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="early-chart-canvas" width="660" height="255"></canvas>
+          </div>
+          <table class="data-table compact mt-12" id="early-step-table">
+            <thead>
+              <tr>
+                <th>Mốc</th>
+                <th class="right">Số nút</th>
+                <th class="right">Độ sâu</th>
+                <th>BiGCN-Plus</th>
+                <th>BiGCN-Base</th>
+                <th>RAGCL</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: WHAT-IF SANDBOX -->
+    <section id="tab-whatif" class="tab-panel">
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-header">
+            <h2>Thiết lập Kịch bản Phản thực tế (Counterfactual What-If)</h2>
+            <span class="meta-line">Kiểm chứng tác động độc lập của Văn bản &amp; Đồ thị</span>
+          </div>
+          <div class="form-row">
+            <label for="wi-text">Nội dung bài đăng gốc (tiếng Anh theo từ điển Twitter15/16)</label>
+            <textarea id="wi-text" rows="3" placeholder="Nhập nội dung bài viết giả lập..."></textarea>
+            <div class="preset-row">
+              <button class="btn-sm" data-preset="current">Dùng bài viết đang chọn</button>
+              <button class="btn-sm" data-preset="rumor">Mẫu tin giật gân (Breaking Rumor)</button>
+              <button class="btn-sm" data-preset="news">Mẫu tin báo chí (Official Source)</button>
+            </div>
+          </div>
+          <div class="grid-sub2 mt-12">
+            <div class="form-row">
+              <label for="wi-template">Hình thái cây lan truyền</label>
+              <select id="wi-template">
+                <option value="use_base">Dùng cây sự kiện hiện tại (có thể cắt tỉa)</option>
+                <option value="root_only">1 nút gốc cô lập (0 phản hồi)</option>
+                <option value="flat_star">Tin chính thống phẳng (Star, 65 nút, độ sâu 1)</option>
+                <option value="deep_viral">Tranh luận lan tỏa sâu (Viral, 120 nút, độ sâu 5)</option>
+                <option value="slow_sparse">Cây thưa phản hồi chậm (14 nút, trễ sâu)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="wi-keep-ratio">Tỷ lệ giữ cạnh của cây gốc: <strong id="wi-ratio-val">100%</strong></label>
+              <input type="range" id="wi-keep-ratio" min="10" max="100" value="100" step="10" />
+            </div>
+          </div>
+          <div class="mt-12">
+            <button class="btn-primary" id="btn-run-whatif">Chạy Suy luận Giả lập Trực tiếp</button>
+          </div>
+          <div class="canvas-wrap mt-12">
+            <canvas id="tree-canvas-3" width="660" height="310"></canvas>
+            <div class="tree-tooltip" id="tree-tooltip-3"></div>
+          </div>
+        </div>
+
+        <div class="stack-col">
+          <div class="card">
+            <div class="card-header">
+              <h2>Kết quả Dự đoán dưới Kịch bản Giả lập</h2>
+              <span class="meta-line" id="wi-tree-summary">—</span>
+            </div>
+            <table class="data-table" id="wi-model-table">
+              <thead>
+                <tr>
+                  <th>Mô hình</th>
+                  <th>Dự đoán</th>
+                  <th class="right">Độ tin cậy</th>
+                  <th>NR / FR / TR / UR</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h2>Phản ứng 3 Chuyên gia của BiGCN-Plus-Clean</h2>
+            </div>
+            <div class="fusion-strip" id="wi-fusion-strip"></div>
+            <div id="wi-branch-bars" class="branch-bars"></div>
+            <h3 class="mt-12">Từ khóa đóng góp mạnh nhất trong câu nhập</h3>
+            <ul class="token-list" id="wi-tokens-list"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: COLAB BENCHMARK EXPLORER -->
+    <section id="tab-benchmark" class="tab-panel">
+      <div class="card mb-16">
+        <div class="card-header">
+          <div>
+            <h2>Bảng Xếp Hạng Đa Hạt Giống (5 Seeds &times; 5 Folds = 25 Lượt Chạy)</h2>
+            <span class="meta-line">Đồng bộ từ thư mục kết quả <code>results/tables/</code></span>
+          </div>
+          <div class="bench-filters">
+            <select id="bench-ds">
+              <option value="Twitter15">Twitter15</option>
+              <option value="Twitter16">Twitter16</option>
+            </select>
+            <select id="bench-eval">
+              <option value="primary">Chế độ chính (Primary)</option>
+              <option value="last">Cùng chế độ: last</option>
+              <option value="snapshot5">Cùng chế độ: snapshot5</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table" id="bench-master-table">
+            <thead>
+              <tr>
+                <th>Mô hình</th>
+                <th>Eval</th>
+                <th class="right">Lượt</th>
+                <th class="right">Accuracy &plusmn; Std</th>
+                <th class="right">Macro-F1 &plusmn; Std</th>
+                <th class="right">Seed-Std</th>
+                <th class="right">Kappa</th>
+                <th class="right">AUC-ROC</th>
+                <th class="right">Giây/epoch</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid-2col">
+        <div class="card">
+          <div class="card-header">
+            <h2>Độ bền theo Độ thưa Cây Lan truyền (OOF Stratified)</h2>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table compact" id="bench-sparsity-table">
+              <thead>
+                <tr>
+                  <th>Mô hình</th>
+                  <th>Phân tầng quy mô</th>
+                  <th class="right">Số mẫu</th>
+                  <th class="right">Accuracy</th>
+                  <th class="right">Macro-F1</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Kiểm định Thống kê &amp; Phát hiện Sớm</h2>
+            <select id="bench-stat-view">
+              <option value="early">Bảng Phát hiện Sớm theo mốc thời gian</option>
+              <option value="wilcoxon">Kiểm định Wilcoxon &amp; Paired t-test</option>
+            </select>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table compact" id="bench-extra-table">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
