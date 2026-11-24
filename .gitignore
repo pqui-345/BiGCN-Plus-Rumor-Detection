@@ -20,6 +20,10 @@ results/smoke_test_agg/
 logs/
 wandb/
 
+# Report files (kept locally, not uploaded to GitHub)
+report/*
+!report/README.md
+
 # LaTeX build artifacts
 *.aux
 *.bbl
