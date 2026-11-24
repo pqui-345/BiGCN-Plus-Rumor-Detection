@@ -321,7 +321,7 @@ def plot_figures(df, fig_dir):
         ax.grid(True, axis="y", ls="--", alpha=0.35)
         ax.legend(fontsize=8.5)
     plt.tight_layout()
-    plt.savefig(os.path.join(fig_dir, "multiseed_comparison.png"), dpi=300)
+    plt.savefig(os.path.join(fig_dir, "multiseed_comparison.png"), dpi=400)
     plt.close(fig)
 
     # 2. External positioning scatter chart (Twitter15 vs Twitter16 Acc)
@@ -353,7 +353,7 @@ def plot_figures(df, fig_dir):
     ax.set_title("Positioning Against Published Twitter15 / Twitter16 Literature")
     ax.grid(True, ls="--", alpha=0.35)
     plt.tight_layout()
-    plt.savefig(os.path.join(fig_dir, "external_positioning.png"), dpi=300)
+    plt.savefig(os.path.join(fig_dir, "external_positioning.png"), dpi=400)
     plt.close(fig)
 
 
