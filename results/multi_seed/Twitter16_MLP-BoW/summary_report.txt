@@ -1,7 +1,7 @@
 Dataset: Twitter16 | Model: MLP-BoW
 Device: cuda | Primary Eval: last
 Seeds (5): [42, 43, 44, 45, 46] | Folds (5): [0, 1, 2, 3, 4] | Total Runs: 25
-Mean Time: 0.0511 s/ep (or fold)
+Mean Time: 0.0565 s/ep (or fold)
 ----------------------------------------------------------------
 Accuracy          : 0.8445 +/- 0.0226 (seed-std=0.0104)
 Macro-Precision   : 0.8477 +/- 0.0238 (seed-std=0.0120)

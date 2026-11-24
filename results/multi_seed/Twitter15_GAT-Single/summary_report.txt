@@ -1,7 +1,7 @@
 Dataset: Twitter15 | Model: GAT-Single
 Device: cuda | Primary Eval: last
 Seeds (5): [42, 43, 44, 45, 46] | Folds (5): [0, 1, 2, 3, 4] | Total Runs: 25
-Mean Time: 0.4793 s/ep (or fold)
+Mean Time: 0.4831 s/ep (or fold)
 ----------------------------------------------------------------
 Accuracy          : 0.8023 +/- 0.0251 (seed-std=0.0036)
 Macro-Precision   : 0.8098 +/- 0.0238 (seed-std=0.0032)
