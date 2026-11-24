@@ -687,6 +687,108 @@ def _plot_ablation_bars(sub, ds, out_path):
     plt.close(fig)
 
 
+def _boxes_overlap(b1, b2, pad=3.0):
+    return not (
+        b1.x1 + pad < b2.x0
+        or b1.x0 - pad > b2.x1
+        or b1.y1 + pad < b2.y0
+        or b1.y0 - pad > b2.y1
+    )
+
+
+def _overlap_area(b1, b2, pad=3.0):
+    dx = max(0.0, min(b1.x1 + pad, b2.x1) - max(b1.x0 - pad, b2.x0))
+    dy = max(0.0, min(b1.y1 + pad, b2.y1) - max(b1.y0 - pad, b2.y0))
+    return dx * dy
+
+
+def _place_non_overlapping_annotations(fig, ax, entries, occupied_boxes):
+    """Place scatter annotations with greedy bounding-box collision avoidance and leader lines."""
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    ax_box = ax.get_window_extent(renderer)
+    placed_boxes = list(occupied_boxes)
+
+    candidates = [
+        (7, 4, "left", "bottom"),
+        (7, -6, "left", "top"),
+        (-7, 4, "right", "bottom"),
+        (-7, -6, "right", "top"),
+        (0, 12, "center", "bottom"),
+        (0, -12, "center", "top"),
+        (16, 10, "left", "bottom"),
+        (16, -12, "left", "top"),
+        (-16, 10, "right", "bottom"),
+        (-16, -12, "right", "top"),
+        (26, 0, "left", "center"),
+        (-26, 0, "right", "center"),
+        (22, 18, "left", "bottom"),
+        (-22, 18, "right", "bottom"),
+        (22, -20, "left", "top"),
+        (-22, -20, "right", "top"),
+        (0, 24, "center", "bottom"),
+        (0, -24, "center", "top"),
+        (34, 14, "left", "bottom"),
+        (-34, 14, "right", "bottom"),
+        (34, -18, "left", "top"),
+        (-34, -18, "right", "top"),
+    ]
+
+    for item in entries:
+        x, y = item["x"], item["y"]
+        best_ann = None
+        best_box = None
+        best_penalty = float("inf")
+
+        for dx, dy, ha, va in candidates:
+            dist = (dx * dx + dy * dy) ** 0.5
+            arrow = (
+                dict(arrowstyle="-", color=item["color"], lw=0.75, alpha=0.65, shrinkA=0, shrinkB=3)
+                if dist >= 11.5
+                else None
+            )
+            ann = ax.annotate(
+                item["label"],
+                xy=(x, y),
+                xytext=(dx, dy),
+                textcoords="offset points",
+                ha=ha,
+                va=va,
+                fontsize=item["fontsize"],
+                fontweight=item["fontweight"],
+                color=item["color"],
+                arrowprops=arrow,
+                zorder=6 if item["priority"] == 0 else 4,
+            )
+            box = ann.get_window_extent(renderer)
+            inside = (
+                box.x0 >= ax_box.x0 + 4
+                and box.x1 <= ax_box.x1 - 4
+                and box.y0 >= ax_box.y0 + 4
+                and box.y1 <= ax_box.y1 - 4
+            )
+            ov = sum(_overlap_area(box, ob, pad=3.5) for ob in placed_boxes)
+            penalty = ov + (0.0 if inside else 1e7) + 0.05 * dist
+            if inside and ov == 0.0:
+                if best_ann is not None:
+                    best_ann.remove()
+                best_ann = ann
+                best_box = box
+                best_penalty = 0.0
+                break
+            if penalty < best_penalty:
+                if best_ann is not None:
+                    best_ann.remove()
+                best_ann = ann
+                best_box = box
+                best_penalty = penalty
+            else:
+                ann.remove()
+
+        if best_box is not None:
+            placed_boxes.append(best_box)
+
+
 def plot_figures(df, fig_dir):
     if df.empty:
         return
@@ -720,8 +822,19 @@ def plot_figures(df, fig_dir):
     plt.close(fig)
 
     # 2. External positioning scatter chart (Twitter15 vs Twitter16 Acc in [0, 1])
-    fig, ax = plt.subplots(figsize=(9.2, 6.8))
+    fig, ax = plt.subplots(figsize=(9.8, 7.1))
     seen_grp = set()
+    ext_short_map = {
+        "BiGCN Re-impl (RAGCL AAAI 2024)": "BiGCN (RAGCL '24)",
+        "BiGCN Re-impl (BiTGN EMNLP 2023)": "BiGCN (BiTGN '23)",
+        "BiGCN (TF-IDF, COLING 2025)": "BiGCN (COLING '25)",
+        "EBGCN (ACL 2021, orig.)": "EBGCN (ACL '21)",
+        "Bi-GCN Orig. (AAAI 2020)": "Bi-GCN (AAAI '20)",
+    }
+
+    all_xs, all_ys = [], []
+    label_entries = []
+
     for regime, name, t15, t16, _ in EXTERNAL_BENCHMARK:
         is_grp_a = regime.startswith("Group A")
         lbl = None
@@ -736,14 +849,27 @@ def plot_figures(df, fig_dir):
             t16,
             c="#f59e0b" if is_grp_a else "#94a3b8",
             marker="s" if is_grp_a else "o",
-            s=70,
-            alpha=0.88,
+            s=72,
+            alpha=0.9,
             edgecolors="black",
             linewidths=0.6,
             label=lbl,
+            zorder=3,
         )
-        short = name.split(" (")[0]
-        ax.annotate(short, (t15 + 0.0014, t16 + 0.0012), fontsize=8.0, color="#334155")
+        all_xs.append(t15)
+        all_ys.append(t16)
+        short = ext_short_map.get(name, name.split(" (")[0])
+        label_entries.append(
+            {
+                "x": t15,
+                "y": t16,
+                "label": short,
+                "fontsize": 8.1,
+                "fontweight": "normal",
+                "color": "#334155",
+                "priority": 1 if is_grp_a else 2,
+            }
+        )
 
     models_both = set(df[df["Dataset"] == "Twitter15"]["Model"]) & set(df[df["Dataset"] == "Twitter16"]["Model"])
     key_ours = {"TF-IDF-Ridge", "GraphSAGE-Single", "BiGCN-Base", "EBGCN", "RAGCL", "BiGCN-Plus-B12", "BiGCN-Plus-Clean", "BiGCN-Plus-UserID"}
@@ -756,26 +882,46 @@ def plot_figures(df, fig_dir):
             a16,
             c="#dc2626" if is_plus else "#2563eb",
             marker="*",
-            s=185 if is_plus else 130,
+            s=195 if is_plus else 135,
             edgecolors="black",
             zorder=5,
         )
-        dy = -0.0028 if m in {"BiGCN-Plus-Clean", "EBGCN"} else 0.0015
-        ax.annotate(
-            f"{m} (nhóm)",
-            (a15 + 0.0016, a16 + dy),
-            fontsize=8.4,
-            fontweight="bold" if is_plus else "normal",
-            color="#b91c1c" if is_plus else "#1d4ed8",
+        all_xs.append(a15)
+        all_ys.append(a16)
+        label_entries.append(
+            {
+                "x": a15,
+                "y": a16,
+                "label": f"{m} (nhóm)",
+                "fontsize": 8.5,
+                "fontweight": "bold" if is_plus else "normal",
+                "color": "#b91c1c" if is_plus else "#1d4ed8",
+                "priority": 0 if is_plus else 1,
+            }
         )
 
+    ax.set_xlim(min(all_xs) - 0.015, max(all_xs) + 0.020)
+    ax.set_ylim(min(all_ys) - 0.016, max(all_ys) + 0.013)
     ax.xaxis.set_major_formatter(_vi_comma_fmt(2))
     ax.yaxis.set_major_formatter(_vi_comma_fmt(2))
     ax.set_xlabel("Độ chính xác trên Twitter15 (Accuracy)", fontsize=11)
     ax.set_ylabel("Độ chính xác trên Twitter16 (Accuracy)", fontsize=11)
     ax.set_title("Định vị hiệu năng trên Twitter15 và Twitter16 so với công trình quốc tế", fontsize=12)
-    ax.legend(fontsize=8.8, loc="lower right", framealpha=0.92)
+    leg = ax.legend(fontsize=8.8, loc="lower right", framealpha=0.94)
     ax.grid(True, ls="--", alpha=0.35)
+
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    from matplotlib.transforms import Bbox
+
+    occupied = [leg.get_window_extent(renderer)]
+    for px, py in zip(all_xs, all_ys):
+        disp_x, disp_y = ax.transData.transform((px, py))
+        occupied.append(Bbox.from_bounds(disp_x - 6.0, disp_y - 6.0, 12.0, 12.0))
+
+    label_entries.sort(key=lambda e: (e["priority"], -e["y"]))
+    _place_non_overlapping_annotations(fig, ax, label_entries, occupied)
+
     plt.tight_layout()
     plt.savefig(os.path.join(fig_dir, "external_positioning.png"), dpi=400)
     plt.close(fig)
