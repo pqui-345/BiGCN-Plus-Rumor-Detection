@@ -1,16 +1,16 @@
 Dataset: Twitter15 | Model: BiGCN-Base
 Device: cuda | Primary Eval: last
 Seeds (5): [42, 43, 44, 45, 46] | Folds (5): [0, 1, 2, 3, 4] | Total Runs: 25
-Mean Time: 0.3108 s/ep (or fold)
+Mean Time: 0.2917 s/ep (or fold)
 ----------------------------------------------------------------
-Accuracy          : 0.8349 +/- 0.0194 (seed-std=0.0034)
-Macro-Precision   : 0.8385 +/- 0.0187 (seed-std=0.0048)
-Macro-Recall      : 0.8348 +/- 0.0194 (seed-std=0.0034)
-Macro-F1          : 0.8351 +/- 0.0193 (seed-std=0.0036)
-F1-NR             : 0.8409 +/- 0.0324 (seed-std=0.0085)
-F1-FR             : 0.8243 +/- 0.0258 (seed-std=0.0077)
-F1-TR             : 0.8692 +/- 0.0330 (seed-std=0.0066)
-F1-UR             : 0.8059 +/- 0.0266 (seed-std=0.0046)
-Cohen-Kappa       : 0.7798 +/- 0.0259 (seed-std=0.0046)
-MCC               : 0.7809 +/- 0.0256 (seed-std=0.0049)
-AUC-ROC           : 0.9588 +/- 0.0085 (seed-std=0.0018)
+Accuracy          : 0.8374 +/- 0.0229 (seed-std=0.0042)
+Macro-Precision   : 0.8419 +/- 0.0216 (seed-std=0.0045)
+Macro-Recall      : 0.8374 +/- 0.0229 (seed-std=0.0042)
+Macro-F1          : 0.8373 +/- 0.0227 (seed-std=0.0040)
+F1-NR             : 0.8178 +/- 0.0373 (seed-std=0.0097)
+F1-FR             : 0.8300 +/- 0.0342 (seed-std=0.0049)
+F1-TR             : 0.8820 +/- 0.0318 (seed-std=0.0051)
+F1-UR             : 0.8196 +/- 0.0292 (seed-std=0.0061)
+Cohen-Kappa       : 0.7833 +/- 0.0306 (seed-std=0.0056)
+MCC               : 0.7848 +/- 0.0301 (seed-std=0.0059)
+AUC-ROC           : 0.9647 +/- 0.0071 (seed-std=0.0017)
