@@ -669,12 +669,6 @@ def main():
     args = parser.parse_args()
 
     bundle_dir = args.bundle_dir
-    has_official = any(os.path.isfile(os.path.join(bundle_dir, f"{d}_demo_bundle.pt")) for d in ("Twitter15", "Twitter16"))
-    smoke_bundle_dir = os.path.join(ROOT_DIR, "results", "smoke_test", "demo_models")
-    if not has_official and any(os.path.isfile(os.path.join(smoke_bundle_dir, f"{d}_demo_bundle.pt")) for d in ("Twitter15", "Twitter16")):
-        bundle_dir = smoke_bundle_dir
-        print(f"[INFO] Chua co goi chinh thuc tai '{args.bundle_dir}'; dang nap tam goi thu nghiem tu '{bundle_dir}'.")
-
     data_root = find_data_root(args.data_root)
     engine = DemoEngine(data_root, bundle_dir, args.results_dir, args.tables_dir)
     if not engine.bundles:

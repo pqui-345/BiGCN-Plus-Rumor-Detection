@@ -16,10 +16,13 @@ experiment:
 
 branch3:
   max_features: 40000
-  ridge_lam: 0.45
+  g_weight: 0.25          # Trọng số mặc định của nhân 10 thống kê đồ thị (Auto-LOO tối ưu trong {0.05, 0.15, 0.25, 0.35})
+  ridge_lam: 0.45         # Hệ số điều chuẩn mặc định (Auto-LOO tối ưu trong {0.25, 0.35, 0.45, 0.65, 1.00})
+  auto_tune: true         # Bật tối ưu siêu tham số nội bộ tập Train theo Leave-One-Out không rò rỉ
   u_weight_clean: 0.0     # Không dùng User ID (chuẩn sạch, tránh account memorization)
   u_weight_full: 0.95     # Biến thể có User-ID Gram Kernel để đối chứng ablation
 
+# Tùy chọn mở rộng hướng phát triển (Pre-trained Language Model - chưa dùng trong bộ chuẩn 20 mô hình)
 plm:
   model_name: "roberta-base"
   epochs: 6

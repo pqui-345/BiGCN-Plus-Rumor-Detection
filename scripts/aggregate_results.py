@@ -671,19 +671,21 @@ def _plot_ablation_bars(sub, ds, out_path):
     ]
     bars = ax.bar(x, sub_ab["Acc_Mean"], yerr=sub_ab["Acc_Std"], capsize=3.5, color=colors, alpha=0.9, label="Accuracy")
     ax.plot(x, sub_ab["F1_Mean"], color="#f59e0b", marker="s", lw=1.9, markersize=5, label="Macro-F1")
-    for bar, v in zip(bars, sub_ab["Acc_Mean"]):
-        ax.text(bar.get_x() + bar.get_width() / 2.0, v + 0.008, f"{v:.4f}".replace(".", ","), ha="center", va="bottom", fontsize=8.2)
+    for bar, v, s in zip(bars, sub_ab["Acc_Mean"], sub_ab["Acc_Std"]):
+        y_top = float(v) + float(s) + 0.004
+        ax.text(bar.get_x() + bar.get_width() / 2.0, y_top, f"{v:.4f}".replace(".", ","), ha="center", va="bottom", fontsize=8.2)
     ax.set_xticks(x)
     ax.set_xticklabels(sub_ab["Model"], rotation=26, ha="right", fontsize=10)
     ymin = max(0.35, float(sub_ab["Acc_Mean"].min()) - 0.10)
-    ax.set_ylim(ymin, min(1.03, float(sub_ab["Acc_Mean"].max()) + 0.08))
+    ymax_data = float((sub_ab["Acc_Mean"] + sub_ab["Acc_Std"]).max())
+    ax.set_ylim(ymin, min(1.03, ymax_data + 0.048))
     ax.yaxis.set_major_formatter(_vi_comma_fmt(2))
     ax.set_title(f"{ds} — Giải phẫu đóng góp từng thành phần kiến trúc", fontsize=12)
     ax.set_ylabel("Độ chính xác / Macro-F1", fontsize=10.8)
     ax.grid(True, axis="y", ls="--", alpha=0.35)
     ax.legend(fontsize=9.8, loc="lower right")
     plt.tight_layout()
-    plt.savefig(out_path, dpi=400)
+    plt.savefig(out_path, dpi=400, bbox_inches="tight", pad_inches=0.06)
     plt.close(fig)
 
 
@@ -910,6 +912,7 @@ def plot_figures(df, fig_dir):
     leg = ax.legend(fontsize=8.8, loc="lower right", framealpha=0.94)
     ax.grid(True, ls="--", alpha=0.35)
 
+    plt.tight_layout()
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
     from matplotlib.transforms import Bbox
@@ -917,13 +920,12 @@ def plot_figures(df, fig_dir):
     occupied = [leg.get_window_extent(renderer)]
     for px, py in zip(all_xs, all_ys):
         disp_x, disp_y = ax.transData.transform((px, py))
-        occupied.append(Bbox.from_bounds(disp_x - 6.0, disp_y - 6.0, 12.0, 12.0))
+        occupied.append(Bbox.from_bounds(disp_x - 13.0, disp_y - 13.0, 26.0, 26.0))
 
     label_entries.sort(key=lambda e: (e["priority"], -e["y"]))
     _place_non_overlapping_annotations(fig, ax, label_entries, occupied)
 
-    plt.tight_layout()
-    plt.savefig(os.path.join(fig_dir, "external_positioning.png"), dpi=400)
+    plt.savefig(os.path.join(fig_dir, "external_positioning.png"), dpi=400, bbox_inches="tight", pad_inches=0.06)
     plt.close(fig)
 
 

@@ -183,33 +183,51 @@ def save_confusion_matrix(cm, title, out_path):
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
             pct = 100.0 * cm[i, j] / max(row_sums[i, 0], 1)
+            pct_str = f"{pct:.1f}%".replace(".", ",")
             color = "white" if cm[i, j] > thresh else "black"
-            ax.text(j, i, f"{cm[i, j]}\n({pct:.1f}%)", ha="center", va="center", color=color, fontsize=9.5)
+            ax.text(j, i, f"{cm[i, j]}\n({pct_str})", ha="center", va="center", color=color, fontsize=9.5)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=400)
+    plt.savefig(out_path, dpi=400, bbox_inches="tight", pad_inches=0.06)
     plt.close(fig)
 
 
 def save_training_curves(epoch_df, title, out_path):
     if epoch_df.empty:
         return
-    agg = epoch_df.groupby("epoch")[["train_loss", "test_acc", "test_f1"]].mean().reset_index()
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.8, 4.5))
-    ax1.plot(agg["epoch"], agg["train_loss"], color="#1f77b4", lw=2.0)
-    ax1.set_title(f"{title} — Mất mát huấn luyện", fontsize=11.5)
+    from matplotlib.ticker import FuncFormatter
+
+    fmt_vi2 = FuncFormatter(lambda x, pos: f"{x:.2f}".replace(".", ","))
+    fmt_vi3 = FuncFormatter(lambda x, pos: f"{x:.3f}".replace(".", ","))
+    agg = epoch_df.groupby("epoch")[["train_loss", "test_acc", "test_f1"]].agg(["mean", "std"]).reset_index()
+    epochs = agg["epoch"]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12.2, 4.6))
+
+    loss_m = agg["train_loss"]["mean"].fillna(0.0)
+    loss_s = agg["train_loss"]["std"].fillna(0.0)
+    ax1.plot(epochs, loss_m, color="#1f77b4", lw=2.0, label="Mean Loss")
+    if (loss_s > 0).any():
+        ax1.fill_between(epochs, (loss_m - loss_s).clip(lower=0.0), loss_m + loss_s, color="#1f77b4", alpha=0.16)
+    ax1.set_title(f"{title} — Mất mát huấn luyện", fontsize=11.0)
     ax1.set_xlabel("Vòng lặp huấn luyện (Epoch)", fontsize=10.5)
     ax1.set_ylabel("Hàm mất mát (Loss)", fontsize=10.5)
+    ax1.yaxis.set_major_formatter(fmt_vi2)
     ax1.grid(True, ls="--", alpha=0.35)
 
-    ax2.plot(agg["epoch"], agg["test_acc"], label="Accuracy", color="#2ca02c", lw=2.0)
-    ax2.plot(agg["epoch"], agg["test_f1"], label="Macro-F1", color="#ff7f0e", lw=2.0)
-    ax2.set_title(f"{title} — Độ chính xác & Macro-F1 kiểm thử", fontsize=11.5)
+    acc_m = agg["test_acc"]["mean"].fillna(0.0)
+    acc_s = agg["test_acc"]["std"].fillna(0.0)
+    f1_m = agg["test_f1"]["mean"].fillna(0.0)
+    ax2.plot(epochs, acc_m, label="Accuracy (TB 5 seeds)", color="#2ca02c", lw=2.0)
+    if (acc_s > 0).any():
+        ax2.fill_between(epochs, acc_m - acc_s, (acc_m + acc_s).clip(upper=1.0), color="#2ca02c", alpha=0.14)
+    ax2.plot(epochs, f1_m, label="Macro-F1 (TB 5 seeds)", color="#ff7f0e", lw=2.0)
+    ax2.set_title(f"{title} — Accuracy & Macro-F1 kiểm thử", fontsize=11.0)
     ax2.set_xlabel("Vòng lặp huấn luyện (Epoch)", fontsize=10.5)
     ax2.set_ylabel("Điểm số", fontsize=10.5)
-    ax2.legend(fontsize=10)
+    ax2.yaxis.set_major_formatter(fmt_vi3)
+    ax2.legend(fontsize=9.5, loc="lower right")
     ax2.grid(True, ls="--", alpha=0.35)
     plt.tight_layout()
-    plt.savefig(out_path, dpi=400)
+    plt.savefig(out_path, dpi=400, bbox_inches="tight", pad_inches=0.08)
     plt.close(fig)
 
 
@@ -582,7 +600,7 @@ def run_one_model(dataset, model_name, ids, docs, trees, y, plm_embs, args, devi
     if epoch_logs:
         df_ep = pd.DataFrame(epoch_logs)
         df_ep.to_csv(os.path.join(out_dir, "epoch_logs.csv"), index=False)
-        save_training_curves(df_ep[df_ep["seed"] == args.seeds[0]], f"{dataset} — {model_name}", os.path.join(out_dir, "training_curves.png"))
+        save_training_curves(df_ep, f"{dataset} — {model_name}", os.path.join(out_dir, "training_curves.png"))
 
     save_confusion_matrix(cm_primary, f"{dataset} — {model_name} ({primary_mode})", os.path.join(out_dir, "confusion_matrix.png"))
 

@@ -4,9 +4,9 @@ Kho lưu trữ chính thức: `https://github.com/pqui-345/BiGCN-Plus-Rumor-Dete
 
 ---
 
-## 1. Thiết lập lần đầu cho Thành viên (Khang - TV1, Phúc - TV2, Quí - TV3)
+## 1. Thiết lập lần đầu cho 3 Thành viên (TV1, TV2, TV3)
 
-1. **Chấp nhận lời mời Collaborator:** Trưởng nhóm (Quí) vào `Settings -> Collaborators` trên repo GitHub để mời tài khoản GitHub của Khang và Phúc (`Write` access). Khang và Phúc mở email để bấm **Accept invitation**.
+1. **Chấp nhận lời mời Collaborator:** Trưởng nhóm vào `Settings -> Collaborators` trên repo GitHub để mời tài khoản GitHub của các thành viên (`Write` access). Thành viên mở email để bấm **Accept invitation**.
 2. **Tạo GitHub Personal Access Token (PAT)** (dùng để đẩy kết quả từ Google Colab lên thẳng GitHub):
    - Vào GitHub $\rightarrow$ góc trên phải chọn ảnh đại diện $\rightarrow$ **Settings** $\rightarrow$ **Developer settings** $\rightarrow$ **Personal access tokens** $\rightarrow$ **Tokens (classic)**.
    - Bấm **Generate new token (classic)** $\rightarrow$ đặt tên (vd: `colab-ct255`), tích chọn quyền **`repo`**, bấm **Generate token** và copy cất mã token (`ghp_...`).
@@ -20,9 +20,9 @@ Kho lưu trữ chính thức: `https://github.com/pqui-345/BiGCN-Plus-Rumor-Dete
 3. Đảm bảo thư mục dữ liệu `rumor_detection_acl2017` (chứa `twitter15/`, `twitter16/`) nằm trên Google Drive cá nhân (tại `MyDrive/rumor_detection_acl2017` hoặc `MyDrive/NghiepVuTM/dataset/rumdetect2017/rumor_detection_acl2017`).
 4. Chạy **Cell 1** (clone/pull code từ GitHub + nạp dữ liệu từ Drive) và **Cell 2** (nạp hàm chạy tự động bỏ qua model đã xong).
 5. Chạy **đúng Cell được phân công** dưới đây:
-   - **Khang (TV1):** Chạy **Cell 3** (`BiGCN-Base+`, `EBGCN`, `RAGCL` — 6 thư mục, ~12 phút).
-   - **Phúc (TV2):** Chạy **Cell 4** (`BiGCN-Base`, `BiGCN-NoRoot`, `BiGCN-NoDropEdge`, `BiGCN-TDOnly`, `BiGCN-BUOnly` — 10 thư mục, ~15 phút).
-   - **Quí (TV3):** Chạy **Cell 5** (`BiGCN-Plus-UserID`, `BiGCN-Plus-Clean`, `BiGCN-Plus-B1Only`, `BiGCN-Plus-B12`; riêng `B2Only` tự động skip — ~15 phút).
+   - **Thành viên 1 (TV1):** Chạy **Cell 3** (Nhóm NLP thuần văn bản & Cấp độ 1: `TF-IDF-Ridge`, `TF-IDF-LR`, `TF-IDF-SVC`, `MLP-BoW`, `GCN-Single`, `GraphSAGE-Single`, `GAT-Single`).
+   - **Thành viên 2 (TV2):** Chạy **Cell 4** (Nhóm Cấp độ 2: `BiGCN-Base`, `BiGCN-NoRoot`, `BiGCN-NoDropEdge`, `BiGCN-TDOnly`, `BiGCN-BUOnly`, `BiGCN-Base+`, `EBGCN`, `RAGCL`).
+   - **Thành viên 3 (TV3):** Chạy **Cell 5** (Nhóm Cấp độ 3: `BiGCN-Plus-B1Only`, `BiGCN-Plus-B2Only`, `BiGCN-Plus-B12`, `BiGCN-Plus-Clean`, `BiGCN-Plus-UserID` và xuất 2 gói Demo `.pt`).
 6. Chạy **Cell 6** trên Colab:
    - Nhập GitHub Username, Email, dán PAT (`ghp_...`) và ghi Commit Message (ví dụ `feat(tv1): update EBGCN RAGCL BiGCN-Base+ 25 runs`).
    - Cell 6 tự động chạy `scripts/aggregate_results.py`, `git pull --rebase` để ghép với phần của thành viên khác và `git push` thẳng lên nhánh `main` của GitHub.
